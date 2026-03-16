@@ -26,30 +26,33 @@ Claudometer spawns an ephemeral Claude CLI process via a pseudo-terminal (PTY), 
 
 ## Install
 
+### Homebrew (recommended)
+
+```bash
+brew tap sebasrodriguez/tap
+brew install claudometer
+```
+
+Then launch:
+
+```bash
+open $(brew --prefix)/opt/claudometer/Claudometer.app
+```
+
+Optionally link to Applications:
+
+```bash
+ln -sf $(brew --prefix)/opt/claudometer/Claudometer.app /Applications/Claudometer.app
+```
+
+### Build from source
+
 ```bash
 git clone https://github.com/sebasrodriguez/claudometer.git
 cd claudometer/ClaudeUsageBar
 make install
-```
-
-This builds a release binary and creates `ClaudeUsageBar.app`. Then either:
-
-```bash
-# Run directly
 open ClaudeUsageBar.app
-
-# Or copy to Applications
-cp -r ClaudeUsageBar.app /Applications/
 ```
-
-## Build from source
-
-```bash
-cd ClaudeUsageBar
-swift build -c release
-```
-
-The binary will be at `.build/release/ClaudeUsageBar`.
 
 ## Usage
 
