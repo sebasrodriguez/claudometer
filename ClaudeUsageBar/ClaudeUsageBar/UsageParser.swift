@@ -2,139 +2,136 @@ import Foundation
 
 struct UsageParser {
     /// Parse the raw output from Claude's /usage command into structured data.
-    ///
-    /// Known output format (as of Claude Code v2.1.76):
-    /// ```
-    ///   Current session
-    ///   ██                                                 4% used
-    ///   Resets 7pm (America/Montevideo)
-    ///
-    ///   Current week (all models)
-    ///   ███████▌                                           15% used
-    ///   Resets Mar 20 at 2:59am (America/Montevideo)
-    ///
-    ///   Current week (Sonnet only)
-    ///                                                      0% used
-    /// ```
+    /// Uses regex on the full text to handle both multi-line and single-line output formats.
     static func parse(_ rawOutput: String) -> UsageData {
         let cleaned = stripAnsiCodes(rawOutput)
         var data = UsageData()
         data.rawOutput = cleaned
 
-        let lines = cleaned.components(separatedBy: .newlines)
+        let text = cleaned
 
-        enum Section {
-            case none, session, weeklyAll, weeklySonnet, extraUsage
+        // Extract session usage: look for "Current session" ... "X% used"
+        if let match = firstMatch(in: text, pattern: "(?i)Curren.?t?.?\\s+session.*?(\\d+)%\\s*used") {
+            data.sessionUsagePercent = Double(match)
         }
-        var currentSection: Section = .none
 
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let lower = trimmed.lowercased()
+        // Extract session reset: look for "Resets" after "session" and before "Current week"
+        if let sessionBlock = extractBlock(from: text, after: "(?i)Curren.?t?.?\\s+session", before: "(?i)Current week"),
+           let reset = extractReset(from: sessionBlock) {
+            data.sessionResetTime = reset
+        }
 
-            // Detect section headers — use regex to tolerate mangled characters from ANSI stripping
-            if matchesLoosely(lower, "current session") || matchesLoosely(lower, "curren.*session") {
-                currentSection = .session
-                continue
-            } else if matchesLoosely(lower, "current week") && lower.contains("all model") {
-                currentSection = .weeklyAll
-                continue
-            } else if matchesLoosely(lower, "current week") && lower.contains("sonnet") {
-                currentSection = .weeklySonnet
-                continue
-            } else if lower.contains("extra usage") {
-                currentSection = .extraUsage
-                continue
+        // Extract weekly (all models) usage
+        if let match = firstMatch(in: text, pattern: "(?i)Current week \\(all model.*?(\\d+)%\\s*used") {
+            data.weeklyUsagePercent = Double(match)
+        }
+
+        // Extract weekly reset
+        if let weeklyBlock = extractBlock(from: text, after: "(?i)Current week \\(all model", before: "(?i)Current week \\(Sonnet|Extra usage"),
+           let reset = extractReset(from: weeklyBlock) {
+            data.weeklyResetTime = reset
+        }
+
+        // Extract Sonnet usage
+        if let match = firstMatch(in: text, pattern: "(?i)(?:Current week \\()?Sonnet.*?(\\d+)%\\s*used") {
+            data.weeklySonnetPercent = Double(match)
+        }
+
+        // Fallback: if section-based matching failed, try positional matching
+        // Look for all "X% used" patterns in order: first=session, second=weekly, third=sonnet
+        if data.sessionUsagePercent == nil || data.weeklyUsagePercent == nil {
+            let allPercents = allMatches(in: text, pattern: "(\\d+)%\\s*used")
+            if data.sessionUsagePercent == nil, allPercents.count > 0 {
+                data.sessionUsagePercent = Double(allPercents[0])
             }
-
-            // Look for "X% used" pattern
-            if let pct = extractPercentUsed(from: trimmed) {
-                switch currentSection {
-                case .session:
-                    data.sessionUsagePercent = pct
-                case .weeklyAll:
-                    data.weeklyUsagePercent = pct
-                case .weeklySonnet:
-                    data.weeklySonnetPercent = pct
-                default:
-                    if data.sessionUsagePercent == nil {
-                        data.sessionUsagePercent = pct
-                    } else if data.weeklyUsagePercent == nil {
-                        data.weeklyUsagePercent = pct
-                    }
-                }
+            if data.weeklyUsagePercent == nil, allPercents.count > 1 {
+                data.weeklyUsagePercent = Double(allPercents[1])
             }
+            if data.weeklySonnetPercent == nil, allPercents.count > 2 {
+                data.weeklySonnetPercent = Double(allPercents[2])
+            }
+        }
 
-            // Look for "Resets ..." pattern — tolerant of mangled text from ANSI stripping
-            // Match "Rese" followed by optional mangled chars then a time-like pattern
-            if let resetText = extractResetText(from: trimmed) {
-                switch currentSection {
-                case .session:
-                    if data.sessionResetTime == nil { data.sessionResetTime = resetText }
-                case .weeklyAll:
-                    if data.weeklyResetTime == nil { data.weeklyResetTime = resetText }
-                case .weeklySonnet:
-                    break
-                default:
-                    if data.sessionResetTime == nil {
-                        data.sessionResetTime = resetText
-                    } else if data.weeklyResetTime == nil {
-                        data.weeklyResetTime = resetText
-                    }
-                }
+        // Fallback for reset times: find all "Rese.?t?s? ..." patterns
+        if data.sessionResetTime == nil || data.weeklyResetTime == nil {
+            let allResets = allMatches(in: text, pattern: "Rese[t ]?s?\\s+([^R]+?)(?=\\s{2,}|Curren|Extra|Esc|$)")
+            if data.sessionResetTime == nil, allResets.count > 0 {
+                data.sessionResetTime = allResets[0].trimmingCharacters(in: .whitespaces)
+            }
+            if data.weeklyResetTime == nil, allResets.count > 1 {
+                data.weeklyResetTime = allResets[1].trimmingCharacters(in: .whitespaces)
             }
         }
 
         return data
     }
 
-    /// Extract percentage from "X% used" pattern
-    private static func extractPercentUsed(from line: String) -> Double? {
-        let pattern = "(\\d+\\.?\\d*)%\\s*used"
+    // MARK: - Regex Helpers
+
+    /// Return the first capture group from a regex match
+    private static func firstMatch(in text: String, pattern: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-              let range = Range(match.range(at: 1), in: line) else {
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else {
             return nil
         }
-        return Double(line[range])
+        return String(text[range])
     }
 
-    /// Loose string matching that tolerates single-character corruption from ANSI stripping.
-    /// Inserts ".?" between each character of the pattern to allow for missing/extra chars.
-    private static func matchesLoosely(_ text: String, _ keyword: String) -> Bool {
-        // If keyword contains regex metacharacters like .*, use it directly
-        if keyword.contains(".*") || keyword.contains(".?") {
-            return (try? NSRegularExpression(pattern: keyword))
-                .flatMap { $0.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) } != nil
+    /// Return all first capture groups from a regex
+    private static func allMatches(in text: String, pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        return matches.compactMap { match in
+            guard let range = Range(match.range(at: 1), in: text) else { return nil }
+            return String(text[range])
         }
-        // Otherwise, create a loose pattern: insert .? between chars
-        let loosePattern = keyword.map { String($0) }.joined(separator: ".?")
-        return (try? NSRegularExpression(pattern: loosePattern))
-            .flatMap { $0.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) } != nil
     }
 
-    /// Extract reset time text. Tolerant of mangled characters from ANSI stripping.
-    /// Looks for patterns like "Resets 7pm (...)" or "Rese s Mar 20 at 3am (...)"
-    private static func extractResetText(from line: String) -> String? {
-        // Pattern: "Rese" + optional chars + space + time info with optional timezone in parens
-        // The "t" and "s" in "Resets" may be mangled, so we match loosely
-        let pattern = "Rese[t ]?s?\\s+(.+?)\\s*$"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-              let range = Range(match.range(at: 1), in: line) else {
+    /// Extract a block of text between two regex patterns
+    private static func extractBlock(from text: String, after: String, before: String) -> String? {
+        guard let afterRegex = try? NSRegularExpression(pattern: after),
+              let afterMatch = afterRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else {
             return nil
         }
-        let text = String(line[range]).trimmingCharacters(in: .whitespaces)
-        return text.isEmpty ? nil : text
+        let startIdx = text.index(text.startIndex, offsetBy: afterMatch.range.location)
+
+        if let beforeRegex = try? NSRegularExpression(pattern: before) {
+            let searchRange = NSRange(startIdx..., in: text)
+            // Find first match after the "after" pattern
+            let beforeMatches = beforeRegex.matches(in: text, range: searchRange)
+            // Use the first match that comes after the "after" match
+            for m in beforeMatches {
+                if m.range.location > afterMatch.range.location + afterMatch.range.length {
+                    let endIdx = text.index(text.startIndex, offsetBy: m.range.location)
+                    return String(text[startIdx..<endIdx])
+                }
+            }
+        }
+
+        // No "before" found — return everything after
+        return String(text[startIdx...])
     }
+
+    /// Extract reset time from a text block
+    private static func extractReset(from block: String) -> String? {
+        let pattern = "Rese[t ]?s?\\s+(.+?)(?=\\s{2,}|Curren|Extra|Esc|\\n|$)"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: block, range: NSRange(block.startIndex..., in: block)),
+              let range = Range(match.range(at: 1), in: block) else {
+            return nil
+        }
+        let result = String(block[range]).trimmingCharacters(in: .whitespaces)
+        return result.isEmpty ? nil : result
+    }
+
+    // MARK: - ANSI Stripping
 
     /// Strip ANSI escape codes and terminal control sequences from output.
-    /// Handles CSI sequences, cursor movement, DEC private modes, OSC, etc.
     static func stripAnsiCodes(_ text: String) -> String {
         var result = text
 
-        // First pass: Replace cursor-right movements (ESC[NC or ESC[1C) with spaces
-        // These are used by TUIs to add spacing between elements
+        // First pass: Replace cursor-right movements with spaces
         if let cursorRight = try? NSRegularExpression(pattern: "\u{1b}\\[(\\d*)C") {
             let nsRange = NSRange(result.startIndex..., in: result)
             let matches = cursorRight.matches(in: result, range: nsRange).reversed()
@@ -154,16 +151,11 @@ struct UsageParser {
 
         // Second pass: Remove all other escape sequences
         let patterns = [
-            // CSI sequences (except cursor-right which we already handled)
             "\u{1b}\\[[0-9;?]*[A-BD-Za-z]",
-            // OSC sequences
             "\u{1b}\\][^\u{07}\u{1b}]*[\u{07}]",
             "\u{1b}\\][^\u{1b}]*\u{1b}\\\\",
-            // Character set selection
             "\u{1b}[()][A-Z0-9]",
-            // Simple escape sequences
             "\u{1b}[=>NOMDEHcn78]",
-            // Carriage return
             "\\r",
         ]
 
