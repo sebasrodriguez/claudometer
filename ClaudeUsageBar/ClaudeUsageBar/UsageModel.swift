@@ -94,14 +94,11 @@ class UsageModel: ObservableObject {
     }
 
     var menuBarText: String {
-        if isPolling && sessionUsagePercent == nil {
-            return "CC ..."
-        }
         if let pct = sessionUsagePercent {
             return String(format: "CC %.0f%%", pct)
         }
-        if error != nil {
-            return "CC --"
+        if isPolling {
+            return "CC ..."
         }
         return "CC --"
     }
