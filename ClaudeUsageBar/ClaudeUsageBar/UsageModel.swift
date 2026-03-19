@@ -125,6 +125,22 @@ class UsageModel: ObservableObject {
         }
     }
 
+    private let logFile = "/tmp/claudometer.log"
+
+    private func log(_ msg: String) {
+        let ts = ISO8601DateFormatter().string(from: Date())
+        let line = "\(ts) \(msg)\n"
+        if let data = line.data(using: .utf8) {
+            if let fh = FileHandle(forWritingAtPath: logFile) {
+                fh.seekToEndOfFile()
+                fh.write(data)
+                fh.closeFile()
+            } else {
+                FileManager.default.createFile(atPath: logFile, contents: data)
+            }
+        }
+    }
+
     func refreshNow() {
         guard !isPolling else { return }
         isPolling = true
@@ -132,25 +148,35 @@ class UsageModel: ObservableObject {
 
         Task {
             do {
+                log("Poll start")
                 let poller = UsagePoller()
                 let binaryPath = claudeBinaryPath.isEmpty ? nil : claudeBinaryPath
                 let rawText = try await poller.pollUsage(claudePath: binaryPath)
+                let cleaned = UsageParser.stripAnsiCodes(rawText)
                 let parsed = UsageParser.parse(rawText)
+                log("Poll OK: session=\(parsed.sessionUsagePercent ?? -1) weekly=\(parsed.weeklyUsagePercent ?? -1)")
+                if parsed.sessionUsagePercent == nil {
+                    log("Parse failed. Cleaned output:\n\(cleaned.prefix(500))")
+                }
 
                 await MainActor.run {
-                    self.rawOutput = UsageParser.stripAnsiCodes(rawText)
-                    self.sessionUsagePercent = parsed.sessionUsagePercent
-                    self.weeklyUsagePercent = parsed.weeklyUsagePercent
-                    self.weeklySonnetPercent = parsed.weeklySonnetPercent
-                    self.sessionResetTime = parsed.sessionResetTime
-                    self.weeklyResetTime = parsed.weeklyResetTime
-                    self.lastUpdated = Date()
+                    self.rawOutput = cleaned
+                    // Only update values if parsing succeeded — don't wipe cached data
+                    if parsed.sessionUsagePercent != nil {
+                        self.sessionUsagePercent = parsed.sessionUsagePercent
+                        self.weeklyUsagePercent = parsed.weeklyUsagePercent
+                        self.weeklySonnetPercent = parsed.weeklySonnetPercent
+                        self.sessionResetTime = parsed.sessionResetTime
+                        self.weeklyResetTime = parsed.weeklyResetTime
+                        self.lastUpdated = Date()
+                        self.saveCache()
+                        self.checkNotifications()
+                    }
                     self.isPolling = false
                     self.error = nil
-                    self.saveCache()
-                    self.checkNotifications()
                 }
             } catch {
+                log("Poll error: \(error.localizedDescription)")
                 await MainActor.run {
                     self.error = error.localizedDescription
                     self.isPolling = false
