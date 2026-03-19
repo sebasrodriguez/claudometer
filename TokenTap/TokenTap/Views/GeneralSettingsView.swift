@@ -14,10 +14,9 @@ struct GeneralSettingsView: View {
 
                 if manager.providers.count > 1 {
                     Picker("Rotation speed", selection: $manager.rotationInterval) {
-                        Text("3 seconds").tag(3.0)
-                        Text("5 seconds").tag(5.0)
                         Text("10 seconds").tag(10.0)
-                        Text("15 seconds").tag(15.0)
+                        Text("20 seconds").tag(20.0)
+                        Text("30 seconds").tag(30.0)
                     }
                 }
             }

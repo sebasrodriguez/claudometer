@@ -22,7 +22,7 @@ class ProviderManager: ObservableObject {
     @Published var criticalThreshold: Double = UserDefaults.standard.object(forKey: "criticalThreshold") as? Double ?? 90 {
         didSet { UserDefaults.standard.set(criticalThreshold, forKey: "criticalThreshold") }
     }
-    @Published var rotationInterval: Double = UserDefaults.standard.object(forKey: "rotationInterval") as? Double ?? 5.0 {
+    @Published var rotationInterval: Double = UserDefaults.standard.object(forKey: "rotationInterval") as? Double ?? 10.0 {
         didSet {
             UserDefaults.standard.set(rotationInterval, forKey: "rotationInterval")
             startRotation()
@@ -39,7 +39,8 @@ class ProviderManager: ObservableObject {
 
     init() {
         let claude = ProviderState(kind: .claude, provider: ClaudeProvider())
-        providers.append(claude)
+        let codex = ProviderState(kind: .codex, provider: CodexProvider())
+        providers = [claude, codex]
 
         // Forward child objectWillChange to parent so SwiftUI picks up nested updates
         for provider in providers {

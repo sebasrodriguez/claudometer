@@ -30,24 +30,28 @@ struct ProviderUsageData {
 /// Identifies a provider type.
 enum ProviderKind: String, Codable, CaseIterable, Identifiable {
     case claude = "claude"
+    case codex = "codex"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .claude: return "Claude"
+        case .codex: return "Codex"
         }
     }
 
     var shortCode: String {
         switch self {
         case .claude: return "CL"
+        case .codex: return "CX"
         }
     }
 
     var iconName: String {
         switch self {
         case .claude: return "brain.head.profile"
+        case .codex: return "chevron.left.forwardslash.chevron.right"
         }
     }
 }
