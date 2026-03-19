@@ -1,27 +1,39 @@
-# Claudometer
+# TokenTap
 
-Native macOS menu bar app that monitors your Claude Pro/Max session and weekly usage in real-time.
+Multi-provider macOS menu bar app that monitors your AI session usage in real-time. Supports Claude Code and OpenAI Codex, with more providers coming.
 
 ![macOS](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## How it works
 
-Claudometer spawns an ephemeral Claude CLI process via a pseudo-terminal (PTY), sends the `/usage` command, parses the TUI output, and displays the results in your menu bar. No persistent background processes — each poll is a fresh spawn that's killed immediately after capturing data.
+TokenTap spawns ephemeral CLI processes via pseudo-terminals (PTY), sends usage commands (`/usage` for Claude, `/status` for Codex), parses the TUI output, and displays the results in your menu bar. No persistent background processes — each poll is a fresh spawn that's killed immediately after capturing data.
 
 ## Features
 
-- **Menu bar indicator** — session usage fill bar + percentage, always visible
-- **Detailed dropdown** — click to see session, weekly, and Sonnet usage with progress bars and reset times
-- **Auto-refresh** — polls on a configurable interval (1–30 min, default 5 min)
-- **Cached data** — last known usage loads instantly on launch while a fresh poll runs in the background
-- **Notifications** — macOS alerts when usage crosses configurable warning/critical thresholds
-- **Configurable** — display mode, refresh interval, thresholds, and Claude CLI path via Settings
-- **Zero dependencies** — native SwiftUI app, only requires the `claude` CLI installed
+- **Multi-provider** — track Claude Code and OpenAI Codex usage simultaneously
+- **Menu bar indicator** — fill bar + percentage for the active provider
+- **Auto-rotation** — cycles between providers in the menu bar (configurable: 10/20/30s)
+- **Detailed dropdown** — click to see all providers with their usage tiers, progress bars, and reset times
+- **Auto-refresh** — polls each provider on a configurable interval (1–30 min, default 5 min)
+- **Cached data** — last known usage loads instantly on launch
+- **Notifications** — macOS alerts when usage crosses configurable thresholds
+- **Configurable** — display mode, rotation speed, refresh interval, thresholds, CLI paths
+- **Zero dependencies** — native SwiftUI app, only requires CLI tools installed
+- **Pluggable architecture** — adding a new provider is one file + one enum case
+
+## Supported Providers
+
+| Provider | CLI Tool | Command | What it tracks |
+|----------|----------|---------|----------------|
+| Claude Code | `claude` | `/usage` | Session %, Weekly %, Sonnet %, reset times |
+| OpenAI Codex | `codex` | `/status` | Usage % remaining |
 
 ## Requirements
 
 - macOS 14.0+
-- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- At least one supported CLI tool installed and authenticated:
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+  - [OpenAI Codex](https://github.com/openai/codex)
 - Xcode or Swift toolchain (to build from source)
 
 ## Install
@@ -30,67 +42,72 @@ Claudometer spawns an ephemeral Claude CLI process via a pseudo-terminal (PTY), 
 
 ```bash
 brew tap sebasrodriguez/tap
-brew install claudometer
+brew install tokentap
 ```
 
 Then launch:
 
 ```bash
-open $(brew --prefix)/opt/claudometer/Claudometer.app
+open $(brew --prefix)/opt/tokentap/TokenTap.app
 ```
 
 Optionally link to Applications:
 
 ```bash
-ln -sf $(brew --prefix)/opt/claudometer/Claudometer.app /Applications/Claudometer.app
+ln -sf $(brew --prefix)/opt/tokentap/TokenTap.app /Applications/TokenTap.app
 ```
 
 ### Build from source
 
 ```bash
 git clone https://github.com/sebasrodriguez/claudometer.git
-cd claudometer/ClaudeUsageBar
+cd claudometer/TokenTap
 make install
-open ClaudeUsageBar.app
+open TokenTap.app
 ```
 
 ## Usage
 
-Once launched, Claudometer appears in your menu bar with a fill bar and session percentage (e.g. `CC 7%`).
+Once launched, TokenTap appears in your menu bar with a fill bar and provider usage (e.g. `CL 34%`). With multiple providers, it auto-rotates between them.
 
-**Click** the menu bar item to see:
-- **Session usage** — current session progress bar, percentage, and reset time
-- **Weekly usage** — all-models weekly progress bar, percentage, and reset time
-- **Sonnet usage** — Sonnet-only weekly usage (if applicable)
+**Click** the menu bar item to see all providers:
+- **Claude** — Session, Weekly (all models), and Sonnet usage with progress bars and reset times
+- **Codex** — Usage percentage with model info
 
 **Settings** (gear icon in dropdown):
-- **Menu bar style** — Bar + %, Bar only, or Text only
-- **Refresh interval** — how often to poll Claude (1–30 minutes)
-- **Notifications** — enable/disable and set warning (default 80%) and critical (default 90%) thresholds
-- **Claude CLI path** — override auto-detection if needed
+- **General** — menu bar style, rotation speed, notification thresholds
+- **Claude** — refresh interval, CLI binary path
+- **Codex** — refresh interval, CLI binary path
 
 ## Architecture
 
 ```
-┌─────────────────────┐    forkpty() + /usage     ┌──────────────┐
-│  SwiftUI Menu Bar   │ ───────────────────────→  │ claude CLI   │
-│  App                │    parse TUI output        │ (ephemeral   │
-│                     │ ←───────────────────────  │  PTY process) │
-└─────────────────────┘                            └──────────────┘
+┌─────────────────────┐     forkpty() + command      ┌──────────────┐
+│  TokenTap           │ ──────────────────────────→  │ CLI process   │
+│  (SwiftUI)          │     parse TUI output          │ (ephemeral)  │
+│                     │ ←──────────────────────────  │              │
+└─────────────────────┘                               └──────────────┘
+         │
+    ProviderManager
+    ├── ProviderState (Claude)
+    │   └── ClaudeProvider → ClaudePoller + ClaudeParser
+    └── ProviderState (Codex)
+        └── CodexProvider → CodexPoller + CodexParser
 ```
 
-- **UsagePoller** — spawns `claude` via `forkpty()`, types `/usage`, captures output, kills process
-- **UsageParser** — strips ANSI escape codes and parses percentages/reset times from TUI output
-- **UsageModel** — observable data model with polling timer, caching, and notification logic
-- **BarRenderer** — renders the menu bar fill indicator as an `NSImage`
+Adding a new provider requires:
+1. A `*Provider.swift` implementing the `UsageProvider` protocol
+2. A `*Poller.swift` to spawn the CLI and capture output
+3. A `*Parser.swift` to extract usage data
+4. One case added to `ProviderKind`
 
 ## Troubleshooting
 
-**"Claude CLI not found"** — Make sure `claude` is installed and on your PATH. You can also set the path manually in Settings. Common locations: `~/.local/bin/claude`, `/usr/local/bin/claude`, `/opt/homebrew/bin/claude`.
+**"CLI not found"** — Make sure the CLI tool is installed and on your PATH. You can set paths manually in Settings per provider.
 
-**No data on first launch** — The first poll takes ~10 seconds (Claude CLI startup + /usage fetch). Subsequent launches show cached data immediately.
+**No data on first launch** — The first poll takes ~10-15 seconds per provider. Subsequent launches show cached data immediately.
 
-**Stale data** — Click "Refresh Now" in the dropdown to force a fresh poll.
+**Stale data** — Click "Refresh All" in the dropdown to force a fresh poll.
 
 ## License
 
