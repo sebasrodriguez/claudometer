@@ -27,22 +27,22 @@ No persistent background processes. The menu bar auto-rotates between providers,
 - **Cached data** — last known usage loads instantly on launch
 - **Notifications** — macOS alerts when usage crosses configurable thresholds
 - **Configurable** — display mode, rotation speed, refresh interval, thresholds, CLI paths
-- **Zero dependencies** — native SwiftUI app, only requires CLI tools installed
+- **Zero dependencies** — native SwiftUI app, no external libraries
 - **Pluggable architecture** — adding a new provider is one file + one enum case
 
 ## Supported Providers
 
-| Provider | CLI Tool | Command | What it tracks |
-|----------|----------|---------|----------------|
-| Claude Code | `claude` | `/usage` | Session %, Weekly %, Sonnet %, reset times |
-| OpenAI Codex | `codex` | `/status` | Usage % remaining |
+| Provider | Method | What it tracks |
+|----------|--------|----------------|
+| Claude Code | Spawns `claude` CLI via PTY, sends `/usage` | Session %, Weekly %, Sonnet %, reset times |
+| OpenAI Codex | Minimal API call to Codex backend, reads rate limit headers | 5h session %, Weekly %, reset times |
 
 ## Requirements
 
 - macOS 14.0+
-- At least one supported CLI tool installed and authenticated:
-  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-  - [OpenAI Codex](https://github.com/openai/codex)
+- At least one supported tool installed and authenticated:
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — CLI must be on PATH
+  - [OpenAI Codex](https://github.com/openai/codex) — must be logged in (`~/.codex/auth.json`)
 - Xcode or Swift toolchain (to build from source)
 
 ## Install
@@ -69,8 +69,8 @@ ln -sf $(brew --prefix)/opt/tokentap/TokenTap.app /Applications/TokenTap.app
 ### Build from source
 
 ```bash
-git clone https://github.com/sebasrodriguez/claudometer.git
-cd claudometer/TokenTap
+git clone https://github.com/sebasrodriguez/tokentap.git
+cd tokentap/TokenTap
 make install
 open TokenTap.app
 ```
@@ -81,38 +81,40 @@ Once launched, TokenTap appears in your menu bar with a fill bar and provider us
 
 **Click** the menu bar item to see all providers:
 - **Claude** — Session, Weekly (all models), and Sonnet usage with progress bars and reset times
-- **Codex** — Usage percentage with model info
+- **Codex** — 5h session limit and weekly limit with reset times
 
 **Settings** (gear icon in dropdown):
 - **General** — menu bar style, rotation speed, notification thresholds
 - **Claude** — refresh interval, CLI binary path
-- **Codex** — refresh interval, CLI binary path
+- **Codex** — refresh interval
 
 ## Architecture
 
 ```
-┌─────────────────────┐     forkpty() + command      ┌──────────────┐
-│  TokenTap           │ ──────────────────────────→  │ CLI process   │
-│  (SwiftUI)          │     parse TUI output          │ (ephemeral)  │
-│                     │ ←──────────────────────────  │              │
-└─────────────────────┘                               └──────────────┘
-         │
-    ProviderManager
+    ProviderManager (SwiftUI MenuBarExtra)
+    │
     ├── ProviderState (Claude)
-    │   └── ClaudeProvider → ClaudePoller + ClaudeParser
+    │   └── ClaudeProvider
+    │       ├── ClaudePoller  — forkpty() → claude CLI → /usage → raw TUI output
+    │       └── ClaudeParser  — regex extraction of %, reset times from TUI
+    │
     └── ProviderState (Codex)
-        └── CodexProvider → CodexPoller + CodexParser
+        └── CodexProvider
+            ├── CodexPoller   — HTTP POST → chatgpt.com/backend-api/codex/responses
+            └── CodexParser   — reads x-codex-*-used-percent headers
 ```
 
 Adding a new provider requires:
 1. A `*Provider.swift` implementing the `UsageProvider` protocol
-2. A `*Poller.swift` to spawn the CLI and capture output
-3. A `*Parser.swift` to extract usage data
+2. A `*Poller.swift` to fetch usage data (CLI, API, or any method)
+3. A `*Parser.swift` to convert raw data into `[UsageTier]`
 4. One case added to `ProviderKind`
 
 ## Troubleshooting
 
-**"CLI not found"** — Make sure the CLI tool is installed and on your PATH. You can set paths manually in Settings per provider.
+**"CLI not found" (Claude)** — Make sure `claude` is installed and on your PATH. You can set the path manually in Settings.
+
+**No Codex data** — Make sure you're logged into Codex CLI (`codex login`). TokenTap reads the auth token from `~/.codex/auth.json`.
 
 **No data on first launch** — The first poll takes ~10-15 seconds per provider. Subsequent launches show cached data immediately.
 
