@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-20
+
+### Changed
+
+- **Claude provider rewritten** — replaced PTY/CLI spawning with direct Anthropic OAuth usage API (`api.anthropic.com/api/oauth/usage`). Reads token from macOS Keychain. Returns structured JSON instead of parsing TUI output. Dramatically faster and more reliable.
+- **Both providers now use pure HTTP** — no more process spawning, PTY management, or ANSI parsing
+- Added Opus weekly usage tier support for Claude
+- Shared `PollerError` type across all providers
+
+### Removed
+
+- PTY-based Claude poller (ClaudePoller forkpty code)
+- ANSI escape code stripping logic (no longer needed)
+- Claude CLI binary path setting (no longer needed — uses Keychain token)
+
 ## [0.2.1] - 2026-03-20
 
 ### Fixed
@@ -53,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Three display modes: Bar + %, Bar only, Text only
 - Auto-detection of Claude binary from common install locations
 
+[0.3.0]: https://github.com/sebasrodriguez/tokentap/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/sebasrodriguez/tokentap/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/sebasrodriguez/tokentap/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sebasrodriguez/tokentap/releases/tag/v0.1.0

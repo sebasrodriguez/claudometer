@@ -20,7 +20,6 @@ struct SettingsView: View {
 }
 
 struct ClaudeSettingsView: View {
-    @State private var binaryPath = UserDefaults.standard.string(forKey: "provider.claude.binaryPath") ?? ""
     @State private var refreshInterval = UserDefaults.standard.object(forKey: "provider.claude.refreshInterval") as? Double ?? 300
 
     var body: some View {
@@ -39,18 +38,8 @@ struct ClaudeSettingsView: View {
                 }
             }
 
-            Section("Claude CLI") {
-                HStack {
-                    Text("Binary path")
-                    Spacer()
-                    TextField("Auto-detect", text: $binaryPath)
-                        .frame(width: 200)
-                        .textFieldStyle(.roundedBorder)
-                }
-                .onChange(of: binaryPath) {
-                    UserDefaults.standard.set(binaryPath, forKey: "provider.claude.binaryPath")
-                }
-                Text("Leave empty to auto-detect from PATH")
+            Section("Authentication") {
+                Text("Uses OAuth token from macOS Keychain (Claude Code-credentials)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

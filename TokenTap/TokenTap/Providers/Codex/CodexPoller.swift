@@ -80,7 +80,7 @@ final class CodexPoller: Sendable {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let tokens = json?["tokens"] as? [String: Any],
               let token = tokens["access_token"] as? String else {
-            throw PollerError.claudeNotFound
+            throw PollerError.authNotFound
         }
         return token
     }
