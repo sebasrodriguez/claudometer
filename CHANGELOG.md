@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-03-20
+
+### Added
+
+- Color-coded menu bar indicator: bar turns amber at warning threshold (default 80%) and red at critical threshold (default 90%)
+- App icon with usage bars in a ring (green-to-blue gradient)
+
+### Fixed
+
+- Notifications now fire after successful polls (were implemented but never called)
+- Settings changes (refresh interval) take effect immediately without restart
+- Removed old ClaudeUsageBar directory and dead code (1,000+ lines removed)
+- Unified per-provider settings into reusable view
+
 ## [0.3.0] - 2026-03-20
 
 ### Changed
@@ -68,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Three display modes: Bar + %, Bar only, Text only
 - Auto-detection of Claude binary from common install locations
 
+[0.3.1]: https://github.com/sebasrodriguez/tokentap/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sebasrodriguez/tokentap/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/sebasrodriguez/tokentap/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/sebasrodriguez/tokentap/compare/v0.1.0...v0.2.0
