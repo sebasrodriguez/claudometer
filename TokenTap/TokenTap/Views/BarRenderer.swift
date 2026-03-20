@@ -1,13 +1,19 @@
 import AppKit
 
 /// Renders a single vertical fill bar as an NSImage for the menu bar.
-/// Shows session usage, filling from bottom to top.
+/// Color changes based on usage thresholds: blue (normal), amber (warning), red (critical).
 struct BarRenderer {
 
-    static func render(percent: Double?) -> NSImage {
+    static func render(
+        percent: Double?,
+        warningThreshold: Double = 80,
+        criticalThreshold: Double = 90
+    ) -> NSImage {
         let barWidth: CGFloat = 10
         let barHeight: CGFloat = 16
         let cornerRadius: CGFloat = 3.5
+
+        let fillColor = colorForPercent(percent, warning: warningThreshold, critical: criticalThreshold)
 
         let image = NSImage(size: NSSize(width: barWidth, height: barHeight), flipped: false) { rect in
             let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
@@ -29,8 +35,7 @@ struct BarRenderer {
             NSGraphicsContext.current?.cgContext.saveGState()
             path.addClip()
 
-            // Bright white/blue fill — high contrast on dark menu bar
-            NSColor(red: 0.30, green: 0.75, blue: 1.0, alpha: 1.0).setFill()
+            fillColor.setFill()
             NSBezierPath(rect: fillRect).fill()
 
             NSGraphicsContext.current?.cgContext.restoreGState()
@@ -40,5 +45,12 @@ struct BarRenderer {
 
         image.isTemplate = false
         return image
+    }
+
+    private static func colorForPercent(_ percent: Double?, warning: Double, critical: Double) -> NSColor {
+        guard let pct = percent else { return NSColor(red: 0.30, green: 0.75, blue: 1.0, alpha: 1.0) }
+        if pct >= critical { return NSColor(red: 0.95, green: 0.20, blue: 0.20, alpha: 1.0) }
+        if pct >= warning { return NSColor(red: 0.85, green: 0.65, blue: 0.0, alpha: 1.0) }
+        return NSColor(red: 0.30, green: 0.75, blue: 1.0, alpha: 1.0)
     }
 }
