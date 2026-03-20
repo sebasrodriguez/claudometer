@@ -6,6 +6,8 @@
 	<string>TokenTap</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.github.tokentap</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>TokenTap</string>
 	<key>CFBundleVersion</key>
