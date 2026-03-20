@@ -14,7 +14,10 @@ class ProviderState: ObservableObject, Identifiable {
     @Published var error: String?
 
     @Published var refreshInterval: Double {
-        didSet { UserDefaults.standard.set(refreshInterval, forKey: key("refreshInterval")) }
+        didSet {
+            UserDefaults.standard.set(refreshInterval, forKey: key("refreshInterval"))
+            scheduleTimer()
+        }
     }
 
     nonisolated var id: String { kind.id }
@@ -23,11 +26,18 @@ class ProviderState: ObservableObject, Identifiable {
     private var hasNotifiedWarning = false
     private var hasNotifiedCritical = false
 
+    /// Set by ProviderManager so notifications can check global thresholds.
+    weak var manager: ProviderManager?
+
     init(kind: ProviderKind, provider: any UsageProvider) {
         self.kind = kind
         self.provider = provider
         self.refreshInterval = UserDefaults.standard.object(forKey: "provider.\(kind.rawValue).refreshInterval") as? Double ?? 300
         loadCache()
+    }
+
+    deinit {
+        timer?.invalidate()
     }
 
     /// Primary tier (first one) — used for menu bar display.
@@ -87,6 +97,7 @@ class ProviderState: ObservableObject, Identifiable {
                         self.rawOutput = result.rawOutput
                         self.lastUpdated = Date()
                         self.saveCache()
+                        self.manager?.checkNotifications()
                     }
                     self.isPolling = false
                     self.error = nil
@@ -134,13 +145,13 @@ class ProviderState: ObservableObject, Identifiable {
             hasNotifiedCritical = true
             sendNotification(
                 title: "\(kind.displayName) Usage Critical",
-                body: String(format: "Session usage at %.0f%% — consider wrapping up", pct)
+                body: String(format: "Usage at %.0f%% — consider wrapping up", pct)
             )
         } else if pct >= warningThreshold && !hasNotifiedWarning {
             hasNotifiedWarning = true
             sendNotification(
                 title: "\(kind.displayName) Usage Warning",
-                body: String(format: "Session usage at %.0f%%", pct)
+                body: String(format: "Usage at %.0f%%", pct)
             )
         }
 

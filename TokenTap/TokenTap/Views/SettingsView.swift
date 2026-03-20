@@ -8,78 +8,41 @@ struct SettingsView: View {
             GeneralSettingsView(manager: manager)
                 .tabItem { Label("General", systemImage: "gear") }
 
-            ClaudeSettingsView()
-                .tabItem { Label("Claude", systemImage: "brain.head.profile") }
+            if let claude = manager.providers.first(where: { $0.kind == .claude }) {
+                ProviderSettingsView(state: claude, authInfo: "Uses OAuth token from macOS Keychain (Claude Code-credentials)")
+                    .tabItem { Label("Claude", systemImage: "brain.head.profile") }
+            }
 
-            CodexSettingsView()
-                .tabItem { Label("Codex", systemImage: "chevron.left.forwardslash.chevron.right") }
+            if let codex = manager.providers.first(where: { $0.kind == .codex }) {
+                ProviderSettingsView(state: codex, authInfo: "Uses access token from ~/.codex/auth.json")
+                    .tabItem { Label("Codex", systemImage: "chevron.left.forwardslash.chevron.right") }
+            }
         }
         .padding()
-        .frame(width: 400, height: 340)
+        .frame(width: 400, height: 300)
     }
 }
 
-struct ClaudeSettingsView: View {
-    @State private var refreshInterval = UserDefaults.standard.object(forKey: "provider.claude.refreshInterval") as? Double ?? 300
+/// Reusable settings view for any provider.
+struct ProviderSettingsView: View {
+    @ObservedObject var state: ProviderState
+    let authInfo: String
 
     var body: some View {
         Form {
             Section("Polling") {
-                Picker("Refresh interval", selection: $refreshInterval) {
+                Picker("Refresh interval", selection: $state.refreshInterval) {
                     Text("1 min").tag(60.0)
                     Text("2 min").tag(120.0)
                     Text("5 min").tag(300.0)
                     Text("10 min").tag(600.0)
                     Text("15 min").tag(900.0)
                     Text("30 min").tag(1800.0)
-                }
-                .onChange(of: refreshInterval) {
-                    UserDefaults.standard.set(refreshInterval, forKey: "provider.claude.refreshInterval")
                 }
             }
 
             Section("Authentication") {
-                Text("Uses OAuth token from macOS Keychain (Claude Code-credentials)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-    }
-}
-
-struct CodexSettingsView: View {
-    @State private var binaryPath = UserDefaults.standard.string(forKey: "provider.codex.binaryPath") ?? ""
-    @State private var refreshInterval = UserDefaults.standard.object(forKey: "provider.codex.refreshInterval") as? Double ?? 300
-
-    var body: some View {
-        Form {
-            Section("Polling") {
-                Picker("Refresh interval", selection: $refreshInterval) {
-                    Text("1 min").tag(60.0)
-                    Text("2 min").tag(120.0)
-                    Text("5 min").tag(300.0)
-                    Text("10 min").tag(600.0)
-                    Text("15 min").tag(900.0)
-                    Text("30 min").tag(1800.0)
-                }
-                .onChange(of: refreshInterval) {
-                    UserDefaults.standard.set(refreshInterval, forKey: "provider.codex.refreshInterval")
-                }
-            }
-
-            Section("Codex CLI") {
-                HStack {
-                    Text("Binary path")
-                    Spacer()
-                    TextField("Auto-detect", text: $binaryPath)
-                        .frame(width: 200)
-                        .textFieldStyle(.roundedBorder)
-                }
-                .onChange(of: binaryPath) {
-                    UserDefaults.standard.set(binaryPath, forKey: "provider.codex.binaryPath")
-                }
-                Text("Leave empty to auto-detect from PATH")
+                Text(authInfo)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

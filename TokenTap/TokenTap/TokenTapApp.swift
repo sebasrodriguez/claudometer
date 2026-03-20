@@ -30,7 +30,7 @@ class SettingsWindowController {
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = "TokenTap Settings"
-        window.setContentSize(NSSize(width: 420, height: 380))
+        window.setContentSize(NSSize(width: 400, height: 300))
         window.styleMask = [.titled, .closable]
         window.center()
         window.isReleasedWhenClosed = false

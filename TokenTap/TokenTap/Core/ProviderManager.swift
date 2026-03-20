@@ -42,6 +42,11 @@ class ProviderManager: ObservableObject {
         let codex = ProviderState(kind: .codex, provider: CodexProvider())
         providers = [claude, codex]
 
+        // Set back-reference so providers can trigger notifications
+        for provider in providers {
+            provider.manager = self
+        }
+
         // Forward child objectWillChange to parent so SwiftUI picks up nested updates
         for provider in providers {
             provider.objectWillChange
