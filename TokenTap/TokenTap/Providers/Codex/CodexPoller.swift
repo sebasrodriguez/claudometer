@@ -49,12 +49,7 @@ final class CodexPoller: Sendable {
             if lineCount >= 3 { break }
         }
 
-        // Write debug info
-        let hdrs = httpResponse.allHeaderFields
-        let debugInfo = hdrs.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
-        try? "HTTP \(httpResponse.statusCode)\n\(debugInfo)".write(toFile: "/tmp/codex-headers-debug.txt", atomically: true, encoding: .utf8)
-
-        return parseHeaders(hdrs)
+        return parseHeaders(httpResponse.allHeaderFields)
     }
 
     private func parseHeaders(_ headers: [AnyHashable: Any]) -> RateLimitHeaders {
