@@ -4,9 +4,18 @@ Multi-provider macOS menu bar app that monitors your AI session usage in real-ti
 
 ![macOS](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green)
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="TokenTap dropdown showing Claude and Codex usage" width="320">
+</p>
+
 ## How it works
 
-TokenTap spawns ephemeral CLI processes via pseudo-terminals (PTY), sends usage commands (`/usage` for Claude, `/status` for Codex), parses the TUI output, and displays the results in your menu bar. No persistent background processes — each poll is a fresh spawn that's killed immediately after capturing data.
+TokenTap polls your AI provider usage in the background and displays it in your macOS menu bar. Each provider uses its own strategy:
+
+- **Claude Code** — spawns an ephemeral CLI process via PTY, sends `/usage`, and parses the TUI output
+- **OpenAI Codex** — makes a minimal API call and reads rate limit data from response headers
+
+No persistent background processes. The menu bar auto-rotates between providers, and clicking shows the full breakdown for all of them.
 
 ## Features
 
